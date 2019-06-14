@@ -9,9 +9,15 @@
 import UIKit
 import CoreData
 
-class TodoListViewController: UITableViewController, UISearchBarDelegate {
+class TodoListViewController: UITableViewController {
 
     var itemArray: [Item] = [Item]()
+    
+    var selectCategory: Category? {
+        didSet {
+            loadItem()
+        }
+    }
     
 //    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
     
@@ -35,7 +41,7 @@ class TodoListViewController: UITableViewController, UISearchBarDelegate {
 //            itemArray = items
 //        }
         
-        loadItem()
+//        loadItem()
         
     }
     
@@ -85,7 +91,7 @@ class TodoListViewController: UITableViewController, UISearchBarDelegate {
     }
     
     //MARK - Add New Items
-    @IBAction func addButtonPressed(_ sender: Any) {
+    @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
         var textField = UITextField()
         
         let alert = UIAlertController(title: "Add New Item", message: "this is message", preferredStyle: .alert)
@@ -93,6 +99,8 @@ class TodoListViewController: UITableViewController, UISearchBarDelegate {
             // what will happen once the user clicks the add item buttone on our UIAlert
             let newItem = Item(context: self.context)
             newItem.title = textField.text!
+            newItem.done = false
+            newItem.parentCategory = self.selectCategory
             self.itemArray.append(newItem)
             
             self.saveItems()
@@ -124,7 +132,7 @@ class TodoListViewController: UITableViewController, UISearchBarDelegate {
         //self.defaults.set(self.itemArray, forKey: "TodoListArray")
     }
     
-    func loadItem() {
+    func loadItem(with request: NSFetchRequest<Item> = Item.fetchRequest(), preditcate: NSPredicate? = nil) {
 //        if let data = try? Data(contentsOf: dataFilePath!) {
 //            let decoder = PropertyListDecoder()
 //            do {
@@ -134,12 +142,48 @@ class TodoListViewController: UITableViewController, UISearchBarDelegate {
 //            }
 //
 //        }
-        let request: NSFetchRequest<Item> = Item.fetchRequest()
+//        let request: NSFetchRequest<Item> = Item.fetchRequest()
+        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectCategory!.name!)
+        
+        if let additionalPredicate = preditcate {
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
+        } else {
+            request.predicate = categoryPredicate
+        }
+        
         do {
             itemArray = try context.fetch(request)
         } catch {
             print("error")
         }
+        tableView.reloadData()
     }
+    
+    
+    
 }
 
+//MARK - search bar methods
+extension TodoListViewController: UISearchBarDelegate {
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        let request: NSFetchRequest<Item> = Item.fetchRequest()
+        
+        let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
+        
+        request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+        
+        loadItem(with: request, preditcate: predicate)
+    }
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if searchBar.text?.count == 0 {
+            loadItem()
+            
+            DispatchQueue.main.async {
+                // no longer editing which is the keyboard go away
+                searchBar.resignFirstResponder()
+            }
+        }
+    }
+}
